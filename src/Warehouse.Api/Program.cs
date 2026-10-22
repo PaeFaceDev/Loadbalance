@@ -38,14 +38,19 @@ app.MapControllers();
 app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") });
 
-using (var scope = app.Services.CreateScope())
+// Only run migrations on api-1 to avoid race conditions
+var instanceId = builder.Configuration["INSTANCE_ID"] ?? Environment.MachineName;
+if (instanceId == "api-1")
 {
-    var db = scope.ServiceProvider.GetRequiredService<WarehouseDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<WarehouseDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
 
-    await db.Database.MigrateAsync();
-    await DatabaseSeeder.SeedAsync(db, logger);
-    await PostgrestSchemaInitializer.EnsureAsync(db, logger);
+        await db.Database.MigrateAsync();
+        await DatabaseSeeder.SeedAsync(db, logger);
+        await PostgrestSchemaInitializer.EnsureAsync(db, logger);
+    }
 }
 
 app.Run();
