@@ -1,0 +1,13 @@
+@host = http://localhost:8080
+
+### Load balance probe (watch X-Instance-Id change)
+GET {{host}}/api/system/info
+
+### Products
+GET {{host}}/api/products
+
+### Stock balances (ASP.NET)
+GET {{host}}/api/stock/balances
+
+### PostgREST read model
+GET {{host}}/rest/stock_overview?limit=10
