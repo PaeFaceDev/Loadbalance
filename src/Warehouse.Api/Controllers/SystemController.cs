@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Warehouse.Api.Controllers;
 
+[AllowAnonymous]
 [ApiController]
 [Route("api/system")]
 public sealed class SystemController(IConfiguration configuration) : ControllerBase

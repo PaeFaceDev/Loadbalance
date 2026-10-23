@@ -13,29 +13,43 @@ import {
   AdjustStockRequest,
   SystemInfo,
 } from './types';
+import { clearSession, getStoredToken } from './auth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 class ApiClient {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const token = getStoredToken();
     const response = await fetch(url, {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options?.headers,
       },
-      ...options,
     });
+
+    if (response.status === 401) {
+      clearSession();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+      throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
+    }
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`API Error: ${response.status} - ${error}`);
+      throw new Error(error || `API Error: ${response.status}`);
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
     }
 
     return response.json();
   }
 
-  // Products
   async getProducts(activeOnly: boolean = false): Promise<Product[]> {
     return this.request<Product[]>(`/products?activeOnly=${activeOnly}`);
   }
@@ -58,7 +72,6 @@ class ApiClient {
     });
   }
 
-  // Locations
   async getLocations(activeOnly: boolean = false): Promise<Location[]> {
     return this.request<Location[]>(`/locations?activeOnly=${activeOnly}`);
   }
@@ -77,12 +90,12 @@ class ApiClient {
     });
   }
 
-  // Stock
   async getStockBalances(productId?: string, locationId?: string): Promise<StockBalance[]> {
     const params = new URLSearchParams();
     if (productId) params.append('productId', productId);
     if (locationId) params.append('locationId', locationId);
-    return this.request<StockBalance[]>(`/stock/balances?${params.toString()}`);
+    const query = params.toString();
+    return this.request<StockBalance[]>(`/stock/balances${query ? `?${query}` : ''}`);
   }
 
   async getStockMovements(limit: number = 50): Promise<StockMovement[]> {
@@ -117,7 +130,6 @@ class ApiClient {
     });
   }
 
-  // System
   async getSystemInfo(): Promise<SystemInfo> {
     return this.request<SystemInfo>('/system/info');
   }

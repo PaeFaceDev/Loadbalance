@@ -1,9 +1,11 @@
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Warehouse.Application.Stock;
 
 namespace Warehouse.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/stock")]
 public sealed class StockController(IMediator mediator) : ControllerBase

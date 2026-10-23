@@ -27,11 +27,20 @@ const TableFooter = ({ className, children }: { className?: string; children: Re
   </tfoot>
 )
 
-const TableRow = ({ className, children }: { className?: string; children: ReactNode }) => (
-  <tr className={cn("border-b transition-colors hover:bg-gray-50/50 data-[state=selected]:bg-gray-100", className)}>
-    {children}
-  </tr>
-)
+function TableRow({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"tr">) {
+  return (
+    <tr
+      className={className}
+      {...props}
+    >
+      {children}
+    </tr>
+  );
+}
 
 const TableHead = ({ className, children }: { className?: string; children: ReactNode }) => (
   <th className={cn("h-12 px-4 text-left align-middle font-medium text-gray-500 [&:has([role=checkbox])]:pr-0", className)}>

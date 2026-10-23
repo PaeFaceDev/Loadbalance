@@ -1,67 +1,105 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  Boxes,
+  ClipboardCheck,
+  Package,
+  RefreshCw,
+  Truck,
+} from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { postgrestClient } from '@/lib/postgrest-client';
 import { apiClient } from '@/lib/api-client';
-import { SystemInfo } from '@/lib/types';
-import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { StockBalance, StockMovement, SystemInfo } from '@/lib/types';
+import { PageHeader } from '@/components/page-header';
+import { StatCard } from '@/components/stat-card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Package, MapPin, AlertTriangle, RefreshCw, TrendingUp, Activity } from 'lucide-react';
+import { formatDateTime, formatNumber, movementLabel } from '@/lib/format';
+import { useAuth } from '@/components/auth-provider';
 
-const COLORS = ['#0066CC', '#00B4D8', '#48CAE4', '#90E0EF', '#ADE8F4'];
+const COLORS = ['#0ea5e9', '#2563eb', '#14b8a6', '#f59e0b', '#f43f5e'];
 
 export default function DashboardPage() {
-  const [stockOverview, setStockOverview] = useState<any[]>([]);
-  const [recentMovements, setRecentMovements] = useState<any[]>([]);
+  const { user } = useAuth();
+  const [balances, setBalances] = useState<StockBalance[]>([]);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [overview, setOverview] = useState<any[]>([]);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
+  const load = async () => {
     try {
       setLoading(true);
-      const [overview, movements, sysInfo] = await Promise.all([
-        postgrestClient.getStockOverview(),
-        postgrestClient.getRecentMovements(),
-        apiClient.getSystemInfo(),
+      const [stock, moves, restOverview, info] = await Promise.all([
+        apiClient.getStockBalances(),
+        apiClient.getStockMovements(30),
+        postgrestClient.getStockOverview().catch(() => []),
+        apiClient.getSystemInfo().catch(() => null),
       ]);
-      setStockOverview(overview);
-      setRecentMovements(movements);
-      setSystemInfo(sysInfo);
+      setBalances(stock);
+      setMovements(moves);
+      setOverview(restOverview);
+      setSystemInfo(info);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+      setError(err instanceof Error ? err.message : 'โหลดแดชบอร์ดไม่สำเร็จ');
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const metrics = useMemo(() => {
+    const totalQty = balances.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const low = balances.filter((item) => item.belowReorderLevel);
+    const inbound = movements.filter((item) => item.type === 'Receive' || item.type === '1');
+    const outbound = movements.filter((item) => item.type === 'Issue' || item.type === '2');
+    return {
+      skus: new Set(balances.map((item) => item.productId)).size,
+      totalQty,
+      locations: new Set(balances.map((item) => item.locationId)).size,
+      low: low.length,
+      inboundQty: inbound.reduce((sum, item) => sum + Number(item.quantity), 0),
+      outboundQty: outbound.reduce((sum, item) => sum + Number(item.quantity), 0),
+    };
+  }, [balances, movements]);
+
+  const locationChart = useMemo(() => {
+    const map = new Map<string, number>();
+    balances.forEach((item) => {
+      map.set(item.locationCode, (map.get(item.locationCode) || 0) + Number(item.quantity || 0));
+    });
+    return Array.from(map.entries()).map(([name, quantity]) => ({ name, quantity }));
+  }, [balances]);
+
+  const pieData = useMemo(() => {
+    const map: Record<string, number> = {};
+    movements.forEach((item) => {
+      const label = movementLabel(item.type);
+      map[label] = (map[label] || 0) + 1;
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [movements]);
+
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8 space-y-6">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-6 w-32" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-4 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-16" />
-              </CardContent>
-            </Card>
+      <div className="space-y-6">
+        <Skeleton className="h-12 w-80" />
+        <div className="grid gap-4 md:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-28" />
           ))}
         </div>
       </div>
@@ -70,191 +108,88 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="border-red-200">
-          <CardContent className="pt-6">
-            <p className="text-red-600">Error: {error}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="border-rose-200">
+        <CardContent className="p-6 text-rose-700">{error}</CardContent>
+      </Card>
     );
   }
 
-  const totalProducts = stockOverview.length;
-  const belowReorderCount = stockOverview.filter((item) => item.below_reorder_level).length;
-  const totalStock = stockOverview.reduce((sum, item) => sum + (item.quantity || 0), 0);
-  const totalLocations = new Set(stockOverview.map((item) => item.location_id)).size;
-
-  // Prepare chart data
-  const locationStockData = Array.from(
-    stockOverview.reduce((acc, item) => {
-      const existing = acc.get(item.location_name) || { name: item.location_name, quantity: 0 };
-      existing.quantity += item.quantity || 0;
-      acc.set(item.location_name, existing);
-      return acc;
-    }, new Map()).values()
-  );
-
-  const movementTypeData = recentMovements.reduce((acc, movement) => {
-    const type = movement.movement_type;
-    acc[type] = (acc[type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const pieData = Object.entries(movementTypeData).map(([name, value]) => ({ name, value }));
-
   return (
-    <div className="p-8 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Warehouse Dashboard</h1>
-          {systemInfo && (
-            <p className="text-sm text-gray-500 mt-2">
-              Instance: <span className="font-mono bg-[#E6F2FF] text-[#0066CC] px-3 py-1.5 rounded-lg font-medium">{systemInfo.instanceId}</span>
-            </p>
-          )}
-        </div>
-        <Button onClick={loadDashboardData} variant="outline" className="gap-2 h-10 px-6">
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
+    <div className="space-y-8">
+      <PageHeader
+        title={`สวัสดี ${user?.displayName ?? ''}`}
+        description={`ศูนย์ควบคุมคลัง ${user?.warehouse ?? ''} · ${systemInfo ? `instance ${systemInfo.instanceId}` : 'พร้อมปฏิบัติงาน'}`}
+        icon={<LayoutIcon />}
+        actions={
+          <Button variant="outline" className="gap-2 rounded-xl" onClick={() => void load()}>
+            <RefreshCw className="h-4 w-4" />
+            รีเฟรช
+          </Button>
+        }
+      />
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="SKU ในคลัง" value={metrics.skus} icon={<Package className="h-5 w-5" />} hint="สินค้าที่มีสต็อก" />
+        <StatCard label="ยอดคงเหลือรวม" value={formatNumber(metrics.totalQty)} icon={<Boxes className="h-5 w-5" />} tone="teal" />
+        <StatCard label="โลเคชันที่ใช้งาน" value={metrics.locations} icon={<ClipboardCheck className="h-5 w-5" />} tone="slate" />
+        <StatCard
+          label="ต่ำกว่าจุดสั่งซื้อ"
+          value={metrics.low}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          tone="rose"
+          hint="ต้องเติมหรือรับเข้า"
+        />
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-gradient-to-br from-white to-[#F8FAFC] hover:from-[#F8FAFC] hover:to-white">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-gray-600 font-medium">
-              <div className="p-2 bg-[#E6F2FF] rounded-lg">
-                <Package className="h-4 w-4 text-[#0066CC]" />
-              </div>
-              Total Products
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold text-[#0066CC]">{totalProducts}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-white to-[#F8FAFC] hover:from-[#F8FAFC] hover:to-white">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-gray-600 font-medium">
-              <div className="p-2 bg-[#E6F2FF] rounded-lg">
-                <Activity className="h-4 w-4 text-[#00B4D8]" />
-              </div>
-              Total Stock
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold text-[#00B4D8]">{totalStock.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-white to-[#F8FAFC] hover:from-[#F8FAFC] hover:to-white">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-gray-600 font-medium">
-              <div className="p-2 bg-[#E6F2FF] rounded-lg">
-                <MapPin className="h-4 w-4 text-[#48CAE4]" />
-              </div>
-              Locations
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold text-[#48CAE4]">{totalLocations}</div>
-          </CardContent>
-        </Card>
-
-        <Card className={`bg-gradient-to-br from-white to-[#F8FAFC] hover:from-[#F8FAFC] hover:to-white ${belowReorderCount > 0 ? 'border-2 border-red-200' : ''}`}>
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-gray-600 font-medium">
-              <div className={`p-2 rounded-lg ${belowReorderCount > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
-                <AlertTriangle className={`h-4 w-4 ${belowReorderCount > 0 ? 'text-red-500' : 'text-gray-400'}`} />
-              </div>
-              Below Reorder
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-4xl font-bold ${belowReorderCount > 0 ? 'text-red-600' : 'text-gray-600'}`}>
-              {belowReorderCount}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Link href="/inbound" className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <Truck className="h-5 w-5 text-cyan-600" />
+          <div className="mt-3 font-semibold">รับสินค้าเข้า</div>
+          <p className="mt-1 text-sm text-slate-500">บันทึก ASN / GRN เข้าโลเคชันรับ</p>
+          <p className="mt-3 text-xs text-slate-400">ปริมาณรับล่าสุด {formatNumber(metrics.inboundQty)}</p>
+        </Link>
+        <Link href="/outbound" className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <Package className="h-5 w-5 text-blue-600" />
+          <div className="mt-3 font-semibold">จ่าย / จัดส่ง</div>
+          <p className="mt-1 text-sm text-slate-500">ตัดสต็อกตามออเดอร์หรือใบเบิก</p>
+          <p className="mt-3 text-xs text-slate-400">ปริมาณจ่ายล่าสุด {formatNumber(metrics.outboundQty)}</p>
+        </Link>
+        <Link href="/transfers" className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <ArrowLeftRight className="h-5 w-5 text-teal-600" />
+          <div className="mt-3 font-semibold">โอนย้ายโลเคชัน</div>
+          <p className="mt-1 text-sm text-slate-500">Putaway จาก STAGING ไปชั้นเก็บ</p>
+        </Link>
       </div>
 
-      {/* Quick Actions */}
-      <Card className="bg-gradient-to-br from-white to-[#F8FAFC]">
-        <CardHeader>
-          <CardTitle className="text-gray-900">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link href="/products" className="block">
-              <Button className="w-full gap-2 h-12 bg-gradient-to-r from-[#0066CC] to-[#00B4D8] hover:from-[#004C99] hover:to-[#0094B8]">
-                <Package className="h-5 w-5" />
-                Manage Products
-              </Button>
-            </Link>
-            <Link href="/locations" className="block">
-              <Button className="w-full gap-2 h-12 bg-gradient-to-r from-[#0066CC] to-[#00B4D8] hover:from-[#004C99] hover:to-[#0094B8]">
-                <MapPin className="h-5 w-5" />
-                Manage Locations
-              </Button>
-            </Link>
-            <Link href="/stock" className="block">
-              <Button className="w-full gap-2 h-12 bg-gradient-to-r from-[#0066CC] to-[#00B4D8] hover:from-[#004C99] hover:to-[#0094B8]">
-                <TrendingUp className="h-5 w-5" />
-                Stock Operations
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-gradient-to-br from-white to-[#F8FAFC]">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-[#0066CC]">Stock by Location</CardTitle>
+            <CardTitle>สต็อกตามโลเคชัน</CardTitle>
+            <CardDescription>ยอดคงเหลือรวมในแต่ละตำแหน่ง</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={locationStockData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                <XAxis dataKey="name" stroke="#64748B" />
-                <YAxis stroke="#64748B" />
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={locationChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="name" stroke="#64748b" />
+                <YAxis stroke="#64748b" />
                 <Tooltip />
-                <Bar dataKey="quantity" fill="url(#barGradient)" radius={[6, 6, 0, 0]} />
-                <defs>
-                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0066CC" />
-                    <stop offset="100%" stopColor="#00B4D8" />
-                  </linearGradient>
-                </defs>
+                <Bar dataKey="quantity" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-
-        <Card className="bg-gradient-to-br from-white to-[#F8FAFC]">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-[#0066CC]">Movement Types</CardTitle>
+            <CardTitle>ประเภทการเคลื่อนไหว</CardTitle>
+            <CardDescription>สัดส่วนรายการล่าสุด</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={280}>
               <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${percent ? (percent * 100).toFixed(0) : 0}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
+                  {pieData.map((_, index) => (
+                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -264,109 +199,71 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Stock Overview Table */}
-      <Card className="bg-gradient-to-br from-white to-[#F8FAFC]">
-        <CardHeader>
-          <CardTitle className="text-[#0066CC]">Stock Overview</CardTitle>
-          <CardDescription>Real-time stock levels across all locations</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Reorder Level</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stockOverview.map((item, index) => (
-                <TableRow key={index} className="hover:bg-[#F8FAFC]">
-                  <TableCell className="font-medium">
-                    {item.product_name}
-                    <span className="text-gray-500 text-xs ml-2">({item.product_sku})</span>
-                  </TableCell>
-                  <TableCell>
-                    {item.location_name}
-                    <span className="text-gray-500 text-xs ml-2">({item.location_code})</span>
-                  </TableCell>
-                  <TableCell className="font-semibold text-[#0066CC]">{item.quantity}</TableCell>
-                  <TableCell>{item.reorder_level}</TableCell>
-                  <TableCell>
-                    {item.below_reorder_level ? (
-                      <Badge variant="destructive">Below Reorder</Badge>
-                    ) : (
-                      <Badge variant="default">OK</Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {stockOverview.length === 0 && (
+      <div className="grid gap-6 xl:grid-cols-5">
+        <Card className="xl:col-span-3">
+          <CardHeader>
+            <CardTitle>ความเคลื่อนไหวล่าสุด</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-gray-500 py-8">
-                    No stock data available
-                  </TableCell>
+                  <TableHead>เวลา</TableHead>
+                  <TableHead>ประเภท</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>โลเคชัน</TableHead>
+                  <TableHead>จำนวน</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Recent Movements Table */}
-      <Card className="bg-gradient-to-br from-white to-[#F8FAFC]">
-        <CardHeader>
-          <CardTitle className="text-[#0066CC]">Recent Movements</CardTitle>
-          <CardDescription>Latest stock movements across the warehouse</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Reference</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentMovements.slice(0, 10).map((movement, index) => (
-                <TableRow key={index} className="hover:bg-[#F8FAFC]">
-                  <TableCell className="text-gray-500">
-                    {new Date(movement.occurred_at).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {movement.movement_type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {movement.product_name}
-                    <span className="text-gray-500 text-xs ml-2">({movement.product_sku})</span>
-                  </TableCell>
-                  <TableCell>
-                    {movement.location_name}
-                    <span className="text-gray-500 text-xs ml-2">({movement.location_code})</span>
-                  </TableCell>
-                  <TableCell className="font-semibold text-[#0066CC]">{movement.quantity}</TableCell>
-                  <TableCell className="text-gray-500">{movement.reference || '-'}</TableCell>
-                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {movements.slice(0, 8).map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="text-slate-500">{formatDateTime(item.createdAt)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{movementLabel(item.type)}</Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{item.productSku}</TableCell>
+                    <TableCell>{item.locationCode}</TableCell>
+                    <TableCell>{formatNumber(item.quantity)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle>รายการต้องเติม</CardTitle>
+            <CardDescription>ต่ำกว่า reorder level</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {balances
+              .filter((item) => item.belowReorderLevel)
+              .slice(0, 6)
+              .map((item) => (
+                <div key={`${item.productId}-${item.locationId}`} className="rounded-xl border border-rose-100 bg-rose-50/60 p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium text-slate-800">{item.productName}</div>
+                    <Badge variant="destructive">ต่ำ</Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {item.productSku} · {item.locationCode} · คงเหลือ {formatNumber(item.quantity)} / จุดสั่ง {formatNumber(item.reorderLevel)}
+                  </div>
+                </div>
               ))}
-              {recentMovements.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500 py-8">
-                    No recent movements
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            {balances.filter((item) => item.belowReorderLevel).length === 0 && (
+              <p className="text-sm text-slate-500">ไม่มีรายการต่ำกว่าจุดสั่งซื้อ</p>
+            )}
+            {overview.length > 0 && (
+              <p className="text-xs text-slate-400">อ่านภาพรวมเพิ่มจาก PostgREST {overview.length} แถว</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
+}
+
+function LayoutIcon() {
+  return <Boxes className="h-6 w-6" />;
 }

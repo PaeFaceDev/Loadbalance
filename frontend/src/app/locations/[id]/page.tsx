@@ -1,239 +1,73 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { apiClient } from '@/lib/api-client';
-import { Location, UpdateLocationRequest } from '@/lib/types';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { MapPin } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
+import { Location } from '@/lib/types';
+import { PageHeader } from '@/components/page-header';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { FeedbackBanner } from '@/components/feedback-banner';
 
-function EditLocationContent({ id }: { id: string }) {
+export default function EditLocationPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
-
   const [location, setLocation] = useState<Location | null>(null);
-  const [formData, setFormData] = useState<UpdateLocationRequest>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const loadLocation = async () => {
-      try {
-        setLoading(true);
-
-        const data = await apiClient.getLocations();
-        const locationData = data.find((l) => l.id === id);
-
-        if (!locationData) {
-          setLocation(null);
-          setError('Location not found');
-          return;
-        }
-
-        setLocation(locationData);
-        setFormData({
-          code: locationData.code,
-          name: locationData.name,
-          description: locationData.description,
-          isActive: locationData.isActive,
-        });
-        setError(null);
-      } catch (err) {
-        setLocation(null);
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to load location'
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void loadLocation();
+    apiClient.getLocations(false).then((items) => {
+      const found = items.find((item) => item.id === id);
+      if (!found) setError('ไม่พบโลเคชัน');
+      else setLocation(found);
+    }).catch((err) => setError(err instanceof Error ? err.message : 'โหลดไม่สำเร็จ'));
   }, [id]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!location) return;
+    const data = new FormData(event.currentTarget);
     setSaving(true);
-    setError(null);
-
     try {
-      await apiClient.updateLocation(id, formData);
+      await apiClient.updateLocation(id, {
+        name: String(data.get('name')),
+        zone: String(data.get('zone')),
+        isActive: data.get('isActive') === 'on',
+      });
       router.push('/locations');
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to update location'
-      );
+      setError(err instanceof Error ? err.message : 'บันทึกไม่สำเร็จ');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-  ) => {
-    const { name, value, type } = e.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]:
-        type === 'checkbox'
-          ? (e.target as HTMLInputElement).checked
-          : value,
-    }));
-  };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg">Loading location...</div>
-      </div>
-    );
-  }
-
-  if (error || !location) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-red-600">
-          {error || 'Location not found'}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Edit Location</h1>
-
-          <Link
-            href="/locations"
-            className="text-gray-600 hover:text-gray-900"
-          >
-            Back to Locations
-          </Link>
-        </div>
-
-        {error && (
-          <div className="mb-4 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
-            {error}
-          </div>
-        )}
-
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-lg bg-white p-6 shadow-md"
-        >
-          <div className="mb-4">
-            <label
-              htmlFor="code"
-              className="mb-2 block text-sm font-bold text-gray-700"
-            >
-              Code
-            </label>
-
-            <input
-              id="code"
-              type="text"
-              name="code"
-              value={formData.code || ''}
-              onChange={handleChange}
-              className="w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label
-              htmlFor="name"
-              className="mb-2 block text-sm font-bold text-gray-700"
-            >
-              Name
-            </label>
-
-            <input
-              id="name"
-              type="text"
-              name="name"
-              value={formData.name || ''}
-              onChange={handleChange}
-              className="w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label
-              htmlFor="description"
-              className="mb-2 block text-sm font-bold text-gray-700"
-            >
-              Description
-            </label>
-
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description || ''}
-              onChange={handleChange}
-              rows={3}
-              className="w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="mb-6">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="isActive"
-                checked={formData.isActive ?? true}
-                onChange={handleChange}
-                className="mr-2"
-              />
-              <span className="text-gray-700">Active</span>
-            </label>
-          </div>
-
-          <div className="flex justify-end space-x-4">
-            <Link
-              href="/locations"
-              className="rounded border border-gray-300 px-4 py-2 hover:bg-gray-50"
-            >
-              Cancel
-            </Link>
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </div>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <PageHeader title="แก้ไขโลเคชัน" description={location?.code} icon={<MapPin className="h-6 w-6" />} />
+      <FeedbackBanner message={error} tone="error" />
+      {location && (
+        <Card>
+          <CardContent className="p-6">
+            <form onSubmit={onSubmit} className="space-y-4">
+              <label className="block text-sm font-medium">ชื่อ *<Input name="name" defaultValue={location.name} required className="mt-1.5 h-11" /></label>
+              <label className="block text-sm font-medium">โซน *<Input name="zone" defaultValue={location.zone} required className="mt-1.5 h-11" /></label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="isActive" defaultChecked={location.isActive} />
+                ใช้งาน
+              </label>
+              <div className="flex justify-end gap-3">
+                <Link href="/locations"><Button type="button" variant="outline">ยกเลิก</Button></Link>
+                <Button type="submit" disabled={saving}>{saving ? 'กำลังบันทึก...' : 'บันทึก'}</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
-  );
-}
-
-function EditLocationParams() {
-  const params = useParams<{ id: string }>();
-
-  return <EditLocationContent id={params.id} />;
-}
-
-export default function EditLocationPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-lg">Loading...</div>
-        </div>
-      }
-    >
-      <EditLocationParams />
-    </Suspense>
   );
 }

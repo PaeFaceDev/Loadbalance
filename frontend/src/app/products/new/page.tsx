@@ -1,159 +1,58 @@
 'use client';
 
-import { useState } from 'react';
-import { apiClient } from '@/lib/api-client';
-import { CreateProductRequest } from '@/lib/types';
+import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Package } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
+import { PageHeader } from '@/components/page-header';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { FeedbackBanner } from '@/components/feedback-banner';
 
 export default function NewProductPage() {
   const router = useRouter();
-  const [formData, setFormData] = useState<CreateProductRequest>({
-    sku: '',
-    name: '',
-    description: '',
-    unitPrice: 0,
-    reorderLevel: 10,
-  });
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    setSaving(true);
     try {
-      await apiClient.createProduct(formData);
+      await apiClient.createProduct({
+        sku: String(data.get('sku')),
+        name: String(data.get('name')),
+        unit: String(data.get('unit') || 'pcs'),
+        reorderLevel: Number(data.get('reorderLevel') || 0),
+      });
       router.push('/products');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create product');
+      setError(err instanceof Error ? err.message : 'สร้างสินค้าไม่สำเร็จ');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === 'unitPrice' || name === 'reorderLevel' 
-        ? parseFloat(value) || 0 
-        : value,
-    }));
-  };
-
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">New Product</h1>
-          <Link
-            href="/products"
-            className="text-gray-600 hover:text-gray-900"
-          >
-            Back to Products
-          </Link>
-        </div>
-
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6">
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              SKU *
-            </label>
-            <input
-              type="text"
-              name="sku"
-              value={formData.sku}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Name *
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Description
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Unit Price *
-            </label>
-            <input
-              type="number"
-              name="unitPrice"
-              value={formData.unitPrice}
-              onChange={handleChange}
-              required
-              min="0"
-              step="0.01"
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Reorder Level *
-            </label>
-            <input
-              type="number"
-              name="reorderLevel"
-              value={formData.reorderLevel}
-              onChange={handleChange}
-              required
-              min="0"
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="flex justify-end space-x-4">
-            <Link
-              href="/products"
-              className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-            >
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {loading ? 'Creating...' : 'Create Product'}
-            </button>
-          </div>
-        </form>
-      </div>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <PageHeader title="เพิ่มสินค้า" description="กำหนด SKU หน่วยนับ และจุดสั่งซื้อ" icon={<Package className="h-6 w-6" />} />
+      <FeedbackBanner message={error} tone="error" />
+      <Card>
+        <CardContent className="p-6">
+          <form onSubmit={onSubmit} className="space-y-4">
+            <label className="block text-sm font-medium">SKU *<Input name="sku" required className="mt-1.5 h-11" /></label>
+            <label className="block text-sm font-medium">ชื่อ *<Input name="name" required className="mt-1.5 h-11" /></label>
+            <label className="block text-sm font-medium">หน่วย<Input name="unit" defaultValue="pcs" className="mt-1.5 h-11" /></label>
+            <label className="block text-sm font-medium">จุดสั่งซื้อ<Input name="reorderLevel" type="number" min="0" defaultValue={10} className="mt-1.5 h-11" /></label>
+            <div className="flex justify-end gap-3">
+              <Link href="/products"><Button type="button" variant="outline">ยกเลิก</Button></Link>
+              <Button type="submit" disabled={saving}>{saving ? 'กำลังบันทึก...' : 'สร้างสินค้า'}</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

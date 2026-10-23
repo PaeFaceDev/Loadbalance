@@ -2,111 +2,143 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Suspense } from 'react';
-import { 
-  LayoutDashboard, 
-  Package, 
-  MapPin, 
-  TrendingUp, 
+import { Suspense, useState } from 'react';
+import {
+  LayoutDashboard,
+  Package,
+  MapPin,
+  Boxes,
+  Truck,
+  PackageMinus,
+  ArrowLeftRight,
+  ClipboardCheck,
+  Bell,
+  ListTodo,
+  BarChart3,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useAuth } from '@/components/auth-provider';
+import { canAccess } from '@/lib/auth';
+
+const groups = [
+  {
+    label: 'ภาพรวม',
+    items: [
+      { href: '/', label: 'แดชบอร์ด', icon: LayoutDashboard },
+      { href: '/tasks', label: 'งานคลัง', icon: ListTodo },
+      { href: '/alerts', label: 'แจ้งเตือน', icon: Bell },
+    ],
+  },
+  {
+    label: 'ปฏิบัติการ',
+    items: [
+      { href: '/inbound', label: 'รับสินค้าเข้า', icon: Truck },
+      { href: '/outbound', label: 'จ่าย/จัดส่ง', icon: PackageMinus },
+      { href: '/transfers', label: 'โอนย้าย', icon: ArrowLeftRight },
+      { href: '/cycle-count', label: 'นับสต็อก', icon: ClipboardCheck },
+      { href: '/stock', label: 'ยอดคงเหลือ', icon: Boxes },
+    ],
+  },
+  {
+    label: 'มาสเตอร์',
+    items: [
+      { href: '/products', label: 'สินค้า', icon: Package },
+      { href: '/locations', label: 'โลเคชัน', icon: MapPin },
+      { href: '/reports', label: 'รายงาน', icon: BarChart3 },
+      { href: '/settings', label: 'ตั้งค่า', icon: Settings },
+    ],
+  },
+];
 
 function SidebarContent() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-
-  const menuItems = [
-    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/products', label: 'Products', icon: Package },
-    { href: '/locations', label: 'Locations', icon: MapPin },
-    { href: '/stock', label: 'Stock Operations', icon: TrendingUp },
-    { href: '/settings', label: 'Settings', icon: Settings },
-  ];
+  const { user } = useAuth();
 
   return (
-    <div
+    <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-white border-r border-gray-200 shadow-sm transition-all duration-300 z-50 flex flex-col",
-        collapsed ? "w-20" : "w-72"
+        'fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-slate-800/80 bg-slate-950 text-slate-200 shadow-2xl transition-all duration-300',
+        collapsed ? 'w-20' : 'w-72'
       )}
     >
-      {/* Logo */}
-      <div className="h-20 flex items-center justify-center border-b border-gray-100">
-        {!collapsed ? (
-          <div className="flex items-center gap-3 px-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#0066CC] to-[#00B4D8] rounded-xl flex items-center justify-center shadow-lg">
-              <Package className="h-6 w-6 text-white" />
-            </div>
+      <div className="flex h-16 items-center border-b border-white/10 px-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 shadow-lg shadow-cyan-900/40">
+            <Boxes className="h-5 w-5 text-white" />
+          </div>
+          {!collapsed && (
             <div>
-              <span className="text-xl font-bold text-[#0066CC] block">Warehouse</span>
-              <span className="text-xs text-gray-500">Management</span>
+              <div className="text-sm font-semibold tracking-wide text-white">NEXUS WMS</div>
+              <div className="text-[11px] text-slate-400">Warehouse Control</div>
             </div>
-          </div>
-        ) : (
-          <div className="w-10 h-10 bg-gradient-to-br from-[#0066CC] to-[#00B4D8] rounded-xl flex items-center justify-center shadow-lg">
-            <Package className="h-6 w-6 text-white" />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Collapse Button */}
       <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-24 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 z-10 transition-all hover:shadow-md"
+        onClick={() => setCollapsed((value) => !value)}
+        className="absolute -right-3 top-20 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-300 shadow"
+        aria-label="ย่อเมนู"
       >
-        {collapsed ? (
-          <ChevronRight className="h-4 w-4 text-gray-600" />
-        ) : (
-          <ChevronLeft className="h-4 w-4 text-gray-600" />
-        )}
+        {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
       </button>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-
+      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
+        {groups.map((group) => {
+          const items = group.items.filter((item) => canAccess(user?.role, item.href));
+          if (items.length === 0) return null;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
-                isActive
-                  ? "bg-gradient-to-r from-[#E6F2FF] to-[#D6E8FF] text-[#0066CC] font-medium shadow-sm"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              )}
-            >
-              <Icon className={cn("h-5 w-5 flex-shrink-0 transition-colors", isActive ? "text-[#0066CC]" : "group-hover:text-[#0066CC]")} />
+            <div key={group.label}>
               {!collapsed && (
-                <span className="transition-all">{item.label}</span>
+                <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  {group.label}
+                </div>
               )}
-            </Link>
+              <div className="space-y-1">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition',
+                        isActive
+                          ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/10 text-white shadow-inner'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                      )}
+                    >
+                      <Icon className={cn('h-5 w-5', isActive ? 'text-cyan-300' : '')} />
+                      {!collapsed && <span>{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-100">
+      <div className="border-t border-white/10 p-4">
         {!collapsed && (
-          <div className="bg-gradient-to-r from-[#E6F2FF] to-[#D6E8FF] rounded-xl p-4">
-            <div className="text-xs font-semibold text-[#0066CC] mb-1">Warehouse System</div>
-            <div className="text-xs text-gray-600">Version 1.0.0</div>
+          <div className="rounded-2xl bg-white/5 p-3 text-xs text-slate-400">
+            <div className="font-medium text-slate-200">กะปัจจุบัน · Day Shift</div>
+            <div className="mt-1">เวอร์ชัน 2.0 · Auth แยกโมดูล</div>
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 }
 
 export default function Sidebar() {
   return (
-    <Suspense fallback={<div className="fixed left-0 top-0 h-screen w-72 bg-white border-r border-gray-200" />}>
+    <Suspense fallback={<div className="fixed left-0 top-0 h-screen w-72 bg-slate-950" />}>
       <SidebarContent />
     </Suspense>
   );

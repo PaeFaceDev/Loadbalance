@@ -25,6 +25,9 @@ services:
       INSTANCE_ID: api-1
       ConnectionStrings__WarehouseDb: Host=postgres;Port=5432;Database=warehouse;Username=warehouse_app;Password=warehouse_app_secret
       Swagger__Enabled: "true"
+      Jwt__Issuer: warehouse-auth
+      Jwt__Audience: warehouse-wms
+      Jwt__Key: warehouse-demo-jwt-signing-key-32chars!!
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,6 +41,9 @@ services:
       INSTANCE_ID: api-2
       ConnectionStrings__WarehouseDb: Host=postgres;Port=5432;Database=warehouse;Username=warehouse_app;Password=warehouse_app_secret
       Swagger__Enabled: "true"
+      Jwt__Issuer: warehouse-auth
+      Jwt__Audience: warehouse-wms
+      Jwt__Key: warehouse-demo-jwt-signing-key-32chars!!
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,6 +57,9 @@ services:
       INSTANCE_ID: api-3
       ConnectionStrings__WarehouseDb: Host=postgres;Port=5432;Database=warehouse;Username=warehouse_app;Password=warehouse_app_secret
       Swagger__Enabled: "true"
+      Jwt__Issuer: warehouse-auth
+      Jwt__Audience: warehouse-wms
+      Jwt__Key: warehouse-demo-jwt-signing-key-32chars!!
     depends_on:
       postgres:
         condition: service_healthy
