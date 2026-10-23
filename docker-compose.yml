@@ -79,6 +79,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_POSTGREST_URL: /rest
     environment:
       NEXT_PUBLIC_API_URL: /api
       NEXT_PUBLIC_POSTGREST_URL: /rest
