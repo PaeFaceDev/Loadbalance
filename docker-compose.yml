@@ -80,8 +80,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     environment:
-      NEXT_PUBLIC_API_URL: http://nginx/api
-      NEXT_PUBLIC_POSTGREST_URL: http://nginx/rest
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_POSTGREST_URL: /rest
 
   nginx:
     image: nginx:1.27-alpine
